@@ -1,8 +1,8 @@
 #设定模型的input和target
 import torch
 template={}
-# template['source'] = "Given the following purchase history of user_{} : \n {} \n predict next possible item to be purchased by the user ?"
-template['source']="{}"
+template['source'] = "Given the following purchase history of user_{} : \n {} \n predict next possible item to be purchased by the user ?"
+# template['source']="{}"
 template['target'] = "{}"
 template['task'] = "sequential"
 template['source_argc'] = 2
@@ -16,15 +16,17 @@ def set_template(args):
         #return 
     #else:
         args.template=template
-        args.dataset_name='Books_5'
-        # args.dataset_name='Movies_and_TV_5'
+        # args.dataset_name='Books_5'
+        args.dataset_name='Movies_and_TV_5'
+        # args.dataset_name='Apps_for_Android_5'
         args.rating_score=0
-        args.min_uc=10
-        args.min_sc=20
-        # args.min_uc=5
-        # args.min_sc=5
+        # args.min_uc=10
+        # args.min_sc=20
+        args.min_uc=5
+        args.min_sc=5
         args.max_len=50
         batch=4
+        
         args.train_batch_size=batch
         args.val_batch_size=batch
         args.test_batch_size=batch
@@ -49,7 +51,7 @@ def set_template(args):
         args.lr=0.0003
         args.decay_step=25
         args.gamma=1.0
-        args.num_epochs=1
+        args.num_epochs=5
         args.metric_ks=[1,5,10,20,50]
         args.best_metric='NDCG@10'
         args.seed=42

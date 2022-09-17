@@ -1,5 +1,5 @@
 from wsgiref import validate
-from transformers import  T5Tokenizer,T5ForConditionalGeneration,AdamW
+from transformers import  T5Tokenizer,T5ForConditionalGeneration,T5Config,AdamW
 from abc import ABCMeta, abstractmethod
 from Dataset import Amazon_dataset
 from torch.utils.data import DataLoader
@@ -12,6 +12,8 @@ from pathlib import Path
 from tensorboardX import SummaryWriter
 import numpy as np
 import os
+# from trie import MarisaTrie
+
 class Amazon_trainer(object):
     def __init__(self,args,export_root,train_loader=None, val_loader=None, test_loader=None):
         self.args = args
@@ -21,11 +23,17 @@ class Amazon_trainer(object):
         self.device=args.device
         self.metric_ks = args.metric_ks
         self.best_metric = args.best_metric
+        # self.items=items
 
         self.tokenizer = T5Tokenizer.from_pretrained('t5-base')
+        # config = T5Config().from_pretrained('t5-base')
+        # self.model = T5ForConditionalGeneration(config).to(self.device)
         self.model = T5ForConditionalGeneration.from_pretrained('t5-base').to(self.device)
         #self.prefix_trie=self.construct_trie(items)
         #self.prefix_allowed_tokens_fn=lambda batch_id, sent: trie.get(sent.tolist())
+
+        # self.trie = MarisaTrie([self.tokenizer(items)['input_ids']])
+        # self.prefix_allowed_tokens_fn=lambda batch_id, sent: self.trie.get(sent.tolist())
 
         self.num_epochs=args.num_epochs
         
@@ -68,6 +76,10 @@ class Amazon_trainer(object):
             tqdm_dataloader=tqdm(self.train_loader)
 
             for input,label in tqdm_dataloader:
+                # print('-----------------------train---------------')
+                # print(input)
+                # print(label)
+                # return
                 batch_size = len(label)
 
                 self.optimizer.zero_grad()
@@ -120,11 +132,20 @@ class Amazon_trainer(object):
             tqdm_dataloader=tqdm(self.val_loader)
             # tqdm_dataloader=tqdm(self.train_loader)
             for inputs,labels,negs in tqdm_dataloader:#negs:(N,B)
-                
+                # tokenized_inputs=self.tokenizer(inputs,max_length=512,padding='max_length',return_tensors="pt",truncation=True)
+                # input_ids=tokenized_inputs["input_ids"].to(self.device)#B*T
+                # # print(input_ids.shape)
+                # attention_mask=tokenized_inputs["attention_mask"].to(self.device)#B*T
+                # outputs = self.model.module.generate(input_ids,num_beams=5,num_return_sequences=5,prefix_allowed_tokens_fn=self.prefix_allowed_tokens_fn)
+                # print(self.tokenizer.decode(outputs[0], skip_special_tokens=True))
                 num_negs=len(negs)
                 negs=np.array(negs).T#B*N
                 negs=negs.tolist()
-                
+                # print('---------------------val---------------------')
+                # print(inputs)
+                # print(labels)
+                # print(negs)
+                # return
                 tokenized_inputs=self.tokenizer(inputs,max_length=512,padding='max_length',return_tensors="pt",truncation=True)
                 input_ids=tokenized_inputs["input_ids"].to(self.device)#B*T
                 # print(input_ids.shape)
@@ -140,7 +161,7 @@ class Amazon_trainer(object):
                 
                 encoder_last_hidden_state=outputs['encoder_last_hidden_state']#B*T*H
                 encoder_last_hidden_state=encoder_last_hidden_state.unsqueeze(1).expand(-1,num_negs+1,-1,-1)
-
+    
                 attention_masks=attention_mask.unsqueeze(1).expand(-1,num_negs+1,-1)
 
                 neg_ids=None
@@ -170,7 +191,9 @@ class Amazon_trainer(object):
                     # print(candidate_ids.shape)#((N+1),T)
                     
                     logits=self.model(attention_mask=attention_mask[:51],encoder_outputs=(hidden_state[:51],None,None),decoder_attention_mask=decoder_attention_masks[:51] , labels=candidate_ids[:51])['logits']
-                    logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:] , labels=candidate_ids[51:])['logits']),dim=0)
+                    # logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:100] , labels=candidate_ids[51:])['logits']),dim=0)
+                    for i in range (1,int(num_negs/50)):
+                        logits=torch.cat((logits,self.model(attention_mask=attention_mask[i*50+1:(i+1)*50+1],encoder_outputs=(hidden_state[i*50+1:(i+1)*50+1],None,None),decoder_attention_mask=decoder_attention_masks[i*50+1:(i+1)*50+1] , labels=candidate_ids[i*50+1:(i+1)*50+1])['logits']),dim=0)
                     # logits=candidate_output['logits']#(N+1)*T*H
                     # print(logits.shape)
                     scores=None
@@ -199,10 +222,10 @@ class Amazon_trainer(object):
                 candidates=np.append(labels,negs,axis=1)
                 metrics,row,col= recalls_and_ndcgs_for_ks(scores_mark, label_marks, self.metric_ks)
                 best_three=candidates[row,col].reshape(-1,3)
-                print('')
-                print(labels)
-                print('----------')
-                print(best_three)
+                # print('')
+                # print(labels)
+                # print('----------')
+                # print(best_three)
                 for k, v in metrics.items():
                     average_meter_set.update(k, v)
                 description_metrics = ['NDCG@%d' % k for k in self.metric_ks[:3]] +\
@@ -241,7 +264,7 @@ class Amazon_trainer(object):
                 negs=negs.tolist()
                 
                 tokenized_inputs=self.tokenizer(inputs,max_length=512,padding='max_length',return_tensors="pt",truncation=True)
-                input_ids=tokenized_inputs["input_ids"].to(self.device)#B*T
+                input_ids=tokenized_inputs["inp ut_ids"].to(self.device)#B*T
                 attention_mask=tokenized_inputs["attention_mask"].to(self.device)#B*T
 
                 tokenized_labels=self.tokenizer(labels,max_length=32,padding='max_length',return_tensors="pt",truncation=True)#B*T
@@ -284,7 +307,9 @@ class Amazon_trainer(object):
                     # print(candidate_ids.shape)#((N+1),T)
                     
                     logits=self.model(attention_mask=attention_mask[:51],encoder_outputs=(hidden_state[:51],None,None),decoder_attention_mask=decoder_attention_masks[:51] , labels=candidate_ids[:51])['logits']
-                    logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:] , labels=candidate_ids[51:])['logits']),dim=0)
+                    # logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:] , labels=candidate_ids[51:])['logits']),dim=0)
+                    for i in range (1,int(num_negs/50)):
+                        logits=torch.cat((logits,self.model(attention_mask=attention_mask[i*50+1:(i+1)*50+1],encoder_outputs=(hidden_state[i*50+1:(i+1)*50+1],None,None),decoder_attention_mask=decoder_attention_masks[i*50+1:(i+1)*50+1] , labels=candidate_ids[i*50+1:(i+1)*50+1])['logits']),dim=0)
                     # logits=candidate_output['logits']#(N+1)*T*H
                     # print(logits.shape)
                     scores=None
@@ -308,10 +333,10 @@ class Amazon_trainer(object):
                 candidates=np.append(labels,negs,axis=1)
                 metrics,row,col= recalls_and_ndcgs_for_ks(scores_mark, label_marks, self.metric_ks)
                 best_three=candidates[row,col].reshape(-1,3)
-                print('')
-                print(labels)
-                print('----------')
-                print(best_three)
+                # print('')
+                # print(labels)
+                # print('----------')
+                # print(best_three)
                 
                 for k, v in metrics.items():
                     average_meter_set.update(k, v)

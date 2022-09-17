@@ -69,8 +69,8 @@ class Amazon_Dataset(Dataset):
                                                          args.test_negative_sample_size,
                                                          args.test_negative_sampling_seed,
                                                          save_folder,self.users,self.items)
-        # if self.mode !='train':
-        self.test_negative_samples = test_negative_sampler.get_negative_samples()
+        if self.mode !='train':
+            self.test_negative_samples = test_negative_sampler.get_negative_samples()
 
 
     def __len__(self):
@@ -85,7 +85,7 @@ class Amazon_Dataset(Dataset):
         user_history=self.review_data[user]
         #print(len(user_history))
         #print(user_history)
-        seq=user_history[-(self.max_len+1):-1]
+        seq=user_history[-self.max_len:-1]
         ans=user_history[-1:]
         #print(ans)
         history=''
@@ -97,8 +97,8 @@ class Amazon_Dataset(Dataset):
             else:
                 history+=' .'
         # source_txt=self.template['source'].format('',history)
-        # source_txt=self.template['source'].format(user,history)
-        source_txt=self.template['source'].format(history)
+        source_txt=self.template['source'].format(user,history)
+        # source_txt=self.template['source'].format(history)
         target_text = self.template['target'].format(ans)
         
 

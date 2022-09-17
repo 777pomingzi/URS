@@ -15,6 +15,9 @@ import wget
 import gzip
 
 
+def load_pickle(filename):
+    with open(filename, "rb") as f:
+        return pickle.load(f)
 
 def preprocess(dataset_name,rating_score,min_uc,min_sc):
     data_path=Path('preprocessed')
@@ -26,18 +29,24 @@ def preprocess(dataset_name,rating_score,min_uc,min_sc):
         return 
     if not data_path.parent.is_dir():
         data_path.parent.mkdir(parents=True)
-    df_meta=Amazon_meta()    
+    
     df_review=Amazon(dataset_name,rating_score)
+    # df_review=filter_na(df_review)
+    # print(len(df_review))
+    df_meta=Amazon_meta()    
 
     
+    
     df_review=filter_triplets(df_review,min_sc,min_uc)
-
+    print(len(df_review))
     df_m=df_merge(df_review,df_meta)
-
+    print(len(df_m))
+    print(df_m)
     df_m=filter_na(df_m)
-
-    umap,smap=densify_index(df_m)
-
+    print(len(df_m))
+    print(df_m)
+    df_m,umap,smap=densify_index(df_m)
+    print(umap)
     train,val,test,umap=split_df(df_m,umap,min_uc)
     dataset={'train':train,
                 'val':val,
@@ -121,14 +130,15 @@ def filter_triplets(df,min_sc,min_uc):
 
 def densify_index(df):
     print('Densifying index')
-    umap={u:(i) for i,u in enumerate(set(df['reviewerID']))}
-    smap={s:(i) for i,s in enumerate(set(df['title']))}
+    # umap={u:(i+1) for i,u in enumerate(set(df['reviewerID']))}
+    umap={u:(i+1) for i,u in enumerate(sorted(list(set(df['reviewerID']))))}
+    smap={s:(i+1) for i,s in enumerate(set(df['title']))}
     print(len(umap))
     print("--------------")
     print(len(smap))
-    #df['reviewerName']=df['reviewerName'].map(umap)
+    df['reviewerID']=df['reviewerID'].map(umap)
     #df['title']=df['title'].map(smap)
-    return umap,smap
+    return df,umap,smap
 
 
 def df_merge(left,right):
@@ -137,18 +147,34 @@ def df_merge(left,right):
 
 def split_df(df,umap,min_uc):
     user_group=df.groupby('reviewerID')
+    print(len(user_group))
     user_seq=user_group.progress_apply(lambda d:list(d.sort_values(by='unixReviewTime')['title']))
     train,val,test={},{},{}
     num=0
     sum=0
-    for user in umap:
-        query="reviewerID=='"+user+"'"
+    # for user in umap:
+        # query="reviewerID=='"+user+"'"
+        # username=df.query(query).head(1)['reviewerName'].item()
+        # items=user_seq[user]
+        # if(len(items)>=min_uc) and username not in train.keys(): 
+        #     num+=1
+        #     sum+=len(items)
+        #     train[username],val[username],test[username]=items[:-2],items[:-1],items[:]
+    user_pool=set()
+    for i in range(1,len(umap)+1):
+        # user_id=map_u[i]
+        query="reviewerID=="+str(i)
         username=df.query(query).head(1)['reviewerName'].item()
-        items=user_seq[user]
+        print(username)
+        if username in user_pool:
+            continue
+        user_pool.add(username)
+        items=user_seq[i]
         if(len(items)>=min_uc):
+        # if(len(items)>=min_uc) and username not in train.keys():
+            train[username],val[username],test[username]=items[:-2],items[:-1],items[:]
             num+=1
             sum+=len(items)
-            train[username],val[username],test[username]=items[:-2],items[:-1],items[:]
     print('num of user sequence : ',num)
     print('average length of user sequence : ',sum/num)
     users=list(train.keys())
@@ -202,16 +228,17 @@ def preprocess_bert(dataset_name,rating_score,min_uc,min_sc):
         return 
     if not data_path.parent.is_dir():
         data_path.parent.mkdir(parents=True)
-        
-    df_review=Amazon_bert(dataset_name,rating_score)
+
+    df_review=Amazon(dataset_name,rating_score)
     df_meta=Amazon_meta()
     
     df_review=filter_triplets(df_review,min_sc,min_uc)
     df_m=df_merge(df_review,df_meta)
-
+    print(df_m)
     df_m=filter_na(df_m)
+    print(df_m)
     df_m,umap,smap=densify_index_bert(df_m)
-
+    print(umap)
     train,val,test,umap=split_df_bert(df_m,umap,min_uc)
     print(len(umap))
     dataset={'train':train,
@@ -269,7 +296,8 @@ def Amazon_bert(dataset_name, rating_score):
 
 def densify_index_bert(df):
     print('Densifying index')
-    umap={u:(i+1) for i,u in enumerate(set(df['reviewerID']))}
+    # umap={u:(i+1) for i,u in enumerate(set(df['reviewerID']))}
+    umap={u:(i+1) for i,u in enumerate(sorted(list(set(df['reviewerID']))))}
     smap={s:(i+1) for i,s in enumerate(set(df['asin']))}
     print(len(umap))
     print("--------------")
@@ -283,10 +311,20 @@ def densify_index_bert(df):
 def split_df_bert(df,umap,min_uc):
     print('split_df_bert')
     user_group=df.groupby('reviewerID')
+    print(len(user_group))
     user_seq=user_group.progress_apply(lambda d:list(d.sort_values(by='unixReviewTime')['asin']))
     train,val,test={},{},{}
     user=0
+    user_pool=set()
+    # map_u={(i+1):u for i,u in enumerate(umap)}
     for i in range(1,len(umap)+1):
+        # user_id=map_u[i]
+        query="reviewerID=="+str(i)
+        username=df.query(query).head(1)['reviewerName'].item()
+        print(username)
+        if username in user_pool:
+            continue
+        user_pool.add(username)
         items=user_seq[i]
         if(len(items)>=min_uc):
             train[user],val[user],test[user]=items[:-2],items[-2:-1],items[-1:]

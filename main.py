@@ -11,7 +11,11 @@ def train(args):
     test_dataset=Amazon_dataset.Amazon_Dataset(args,'test')
     # print(train_dataset[0])
     # print(val_dataset[0])
-    # print(test_dataset[0])
+    # # print(test_dataset[0])
+    # for i in range(1000):
+    #     print(train_dataset[i])
+    #     print(val_dataset[i])
+    #     print(test_dataset[i])
     train_sampler=DistributedSampler(train_dataset)
     val_sampler=DistributedSampler(val_dataset)
     test_sampler=DistributedSampler(test_dataset)
