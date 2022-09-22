@@ -87,6 +87,7 @@ class Amazon_Dataset(Dataset):
         #print(user_history)
         seq=user_history[-self.max_len:-1]
         ans=user_history[-1:]
+        ans=ans[0]
         #print(ans)
         history=''
         his_len=len(seq)-1
