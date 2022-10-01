@@ -32,9 +32,11 @@ class RandomNegativeSampler(AbstractNegativeSampler):
             samples = []
             for _ in range(self.sample_size):
                 item = self.items[np.random.choice(self.item_count)]
-                while item in seen or item in samples:
+                prefix_item='<extra_id_0> '+item
+                while item in seen or prefix_item in samples:
                     item = self.items[np.random.choice(self.item_count)]
-                samples.append(item)
+                    prefix_item='<extra_id_0> '+item
+                samples.append(prefix_item)
 
             negative_samples[user] = samples
 

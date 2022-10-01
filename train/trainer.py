@@ -1,5 +1,5 @@
 from wsgiref import validate
-from transformers import  T5Tokenizer,T5ForConditionalGeneration,T5Config,AdamW
+from transformers import  T5Tokenizer,T5ForConditionalGeneration,AdamW,BartTokenizer, BartModel,T5Config
 from abc import ABCMeta, abstractmethod
 from Dataset import Amazon_dataset
 from torch.utils.data import DataLoader
@@ -12,8 +12,6 @@ from pathlib import Path
 from tensorboardX import SummaryWriter
 import numpy as np
 import os
-# from trie import MarisaTrie
-
 class Amazon_trainer(object):
     def __init__(self,args,export_root,train_loader=None, val_loader=None, test_loader=None):
         self.args = args
@@ -23,17 +21,16 @@ class Amazon_trainer(object):
         self.device=args.device
         self.metric_ks = args.metric_ks
         self.best_metric = args.best_metric
-        # self.items=items
 
         self.tokenizer = T5Tokenizer.from_pretrained('t5-base')
+        self.model = T5ForConditionalGeneration.from_pretrained('t5-base').to(self.device)
         # config = T5Config().from_pretrained('t5-base')
         # self.model = T5ForConditionalGeneration(config).to(self.device)
-        self.model = T5ForConditionalGeneration.from_pretrained('t5-base').to(self.device)
+
+        # self.tokenizer = BartTokenizer.from_pretrained('facebook/bart-base')
+        # self.model = BartModel.from_pretrained('facebook/bart-base').to(self.device)
         #self.prefix_trie=self.construct_trie(items)
         #self.prefix_allowed_tokens_fn=lambda batch_id, sent: trie.get(sent.tolist())
-
-        # self.trie = MarisaTrie([self.tokenizer(items)['input_ids']])
-        # self.prefix_allowed_tokens_fn=lambda batch_id, sent: self.trie.get(sent.tolist())
 
         self.num_epochs=args.num_epochs
         
@@ -62,24 +59,21 @@ class Amazon_trainer(object):
             },
         ]
 
-        self.optimizer = AdamW(optimizer_grouped_parameters, lr=args.lr, eps=args.eps)
+        self.optimizer = optim.Adam(optimizer_grouped_parameters, lr=args.lr, eps=args.eps)
         self.lr_scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=args.decay_step, gamma=args.gamma)
 
 
     def train(self):
         self.model.train()
         accum_iter = 0
-        self.validate(0,accum_iter) 
+        # self.validate(0,accum_iter) 
         for epoch in range(self.num_epochs):
 
             average_meter_set = AverageMeterSet()
             tqdm_dataloader=tqdm(self.train_loader)
 
             for input,label in tqdm_dataloader:
-                # print('-----------------------train---------------')
-                # print(input)
-                # print(label)
-                # return
+
                 batch_size = len(label)
 
                 self.optimizer.zero_grad()
@@ -116,8 +110,8 @@ class Amazon_trainer(object):
                     }
                     log_data.update(average_meter_set.averages())
                     self.logger_service.log_train(log_data)
-
-            self.validate(epoch,accum_iter) 
+            if epoch%5==0:
+                self.validate(epoch,accum_iter) 
         # self.validate(epoch,accum_iter) 
         self.test(accum_iter)
         self.writer.close()
@@ -132,20 +126,10 @@ class Amazon_trainer(object):
             tqdm_dataloader=tqdm(self.val_loader)
             # tqdm_dataloader=tqdm(self.train_loader)
             for inputs,labels,negs in tqdm_dataloader:#negs:(N,B)
-                # tokenized_inputs=self.tokenizer(inputs,max_length=512,padding='max_length',return_tensors="pt",truncation=True)
-                # input_ids=tokenized_inputs["input_ids"].to(self.device)#B*T
-                # # print(input_ids.shape)
-                # attention_mask=tokenized_inputs["attention_mask"].to(self.device)#B*T
-                # outputs = self.model.module.generate(input_ids,num_beams=5,num_return_sequences=5,prefix_allowed_tokens_fn=self.prefix_allowed_tokens_fn)
-                # print(self.tokenizer.decode(outputs[0], skip_special_tokens=True))
                 num_negs=len(negs)
                 negs=np.array(negs).T#B*N
                 negs=negs.tolist()
-                # print('---------------------val---------------------')
-                # print(inputs)
-                # print(labels)
-                # print(negs)
-                # return
+                
                 tokenized_inputs=self.tokenizer(inputs,max_length=512,padding='max_length',return_tensors="pt",truncation=True)
                 input_ids=tokenized_inputs["input_ids"].to(self.device)#B*T
                 # print(input_ids.shape)
@@ -161,7 +145,7 @@ class Amazon_trainer(object):
                 
                 encoder_last_hidden_state=outputs['encoder_last_hidden_state']#B*T*H
                 encoder_last_hidden_state=encoder_last_hidden_state.unsqueeze(1).expand(-1,num_negs+1,-1,-1)
-    
+
                 attention_masks=attention_mask.unsqueeze(1).expand(-1,num_negs+1,-1)
 
                 neg_ids=None
@@ -190,6 +174,8 @@ class Amazon_trainer(object):
                     # print(hidden_state.shape)
                     # print(candidate_ids.shape)#((N+1),T)
                     
+                    # logits=self.model(attention_mask=attention_mask[:51],encoder_outputs=(hidden_state[:51],None,None),decoder_attention_mask=decoder_attention_masks[:51] , labels=candidate_ids[:51])['logits']
+                    # logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:] , labels=candidate_ids[51:])['logits']),dim=0)
                     logits=self.model(attention_mask=attention_mask[:51],encoder_outputs=(hidden_state[:51],None,None),decoder_attention_mask=decoder_attention_masks[:51] , labels=candidate_ids[:51])['logits']
                     # logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:100] , labels=candidate_ids[51:])['logits']),dim=0)
                     for i in range (1,int(num_negs/50)):
@@ -210,18 +196,18 @@ class Amazon_trainer(object):
                         scores_mark=torch.cat((scores_mark,scores.unsqueeze(0)),dim=0)
                 # print(scores_mark[:,:20])
                 label_marks=torch.tensor([[1]+[0]*num_negs]).expand(len(inputs),-1)
-                
+
                 
                 # print(scores_mark)
                 # print(label_marks)
                 # print('-------------')
-                # print(scores.size())
+                # print(scores_mark.size())
                 # print(label_marks.size())
-                labels=np.array(labels)
-                labels=np.expand_dims(labels,axis=1)
-                candidates=np.append(labels,negs,axis=1)
+                # labels=np.array(labels)
+                # labels=np.expand_dims(labels,axis=1)
+                # candidates=np.append(labels,negs,axis=1)
                 metrics,row,col= recalls_and_ndcgs_for_ks(scores_mark, label_marks, self.metric_ks)
-                best_three=candidates[row,col].reshape(-1,3)
+                # best_three=candidates[row,col].reshape(-1,3)
                 # print('')
                 # print(labels)
                 # print('----------')
@@ -264,7 +250,7 @@ class Amazon_trainer(object):
                 negs=negs.tolist()
                 
                 tokenized_inputs=self.tokenizer(inputs,max_length=512,padding='max_length',return_tensors="pt",truncation=True)
-                input_ids=tokenized_inputs["inp ut_ids"].to(self.device)#B*T
+                input_ids=tokenized_inputs["input_ids"].to(self.device)#B*T
                 attention_mask=tokenized_inputs["attention_mask"].to(self.device)#B*T
 
                 tokenized_labels=self.tokenizer(labels,max_length=32,padding='max_length',return_tensors="pt",truncation=True)#B*T
@@ -307,9 +293,7 @@ class Amazon_trainer(object):
                     # print(candidate_ids.shape)#((N+1),T)
                     
                     logits=self.model(attention_mask=attention_mask[:51],encoder_outputs=(hidden_state[:51],None,None),decoder_attention_mask=decoder_attention_masks[:51] , labels=candidate_ids[:51])['logits']
-                    # logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:] , labels=candidate_ids[51:])['logits']),dim=0)
-                    for i in range (1,int(num_negs/50)):
-                        logits=torch.cat((logits,self.model(attention_mask=attention_mask[i*50+1:(i+1)*50+1],encoder_outputs=(hidden_state[i*50+1:(i+1)*50+1],None,None),decoder_attention_mask=decoder_attention_masks[i*50+1:(i+1)*50+1] , labels=candidate_ids[i*50+1:(i+1)*50+1])['logits']),dim=0)
+                    logits=torch.cat((logits,self.model(attention_mask=attention_mask[51:],encoder_outputs=(hidden_state[51:],None,None),decoder_attention_mask=decoder_attention_masks[51:] , labels=candidate_ids[51:])['logits']),dim=0)
                     # logits=candidate_output['logits']#(N+1)*T*H
                     # print(logits.shape)
                     scores=None
