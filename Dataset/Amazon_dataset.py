@@ -43,7 +43,7 @@ class Amazon_Dataset(Dataset):
         .format(args.dataset_name,args.rating_score,args.min_uc,args.min_sc)
         
         # if self.mode=='train':
-        #     folder_name='Books_5_min_rating0-min_uc10-min_sc10'
+        #     folder_name='Movies_and_TV_Books_5_min_rating0-min_uc10-min_sc10'
         save_folder=data_path.joinpath('preprocessed',folder_name)
 
         data_path=data_path.joinpath('preprocessed',folder_name,'dataset.pkl')
@@ -123,89 +123,96 @@ class Amazon_Dataset(Dataset):
         return len(self.review_data)
 
 
-    def __getitem__(self,index):
-        # print(index)
-        #print(len(self.users))
-        user=self.users[index]
-        #print(user)
-        user_history=self.review_data[user]
-        #print(len(user_history))
-        #print(user_history)
+    def __getitem__(self,index):#leave-one-out & random-mask
+        # # print(index)
+        # #print(len(self.users))
+        # user=self.users[index]
+        # #print(user)
+        # user_history=self.review_data[user]
+        # #print(len(user_history))
+        # #print(user_history)
+        # # if self.mode=='train':
+        # #     history_sample=self.rng.randint(self.args.min_uc-2,len(user_history))
+        # #     user_history=user_history[:history_sample]
+        # seq=user_history[-self.max_len:-1]
+        # ans=user_history[-1:]
+        # ans=ans[0]
+        # #print(ans)
+        # history=''
+        # his_len=len(seq)-1
+        # for i,item in enumerate(seq):
+        #     history+=item
+        #     if i!=his_len:
+        #         history+=' , '
+        #     else:
+        #         history+=' .'
         if self.mode=='train':
-            history_sample=self.rng.randint(self.args.min_uc-2,len(user_history))
-            user_history=user_history[:history_sample]
-        seq=user_history[-self.max_len:-1]
-        ans=user_history[-1:]
-        ans=ans[0]
-        #print(ans)
-        history=''
-        his_len=len(seq)-1
-        for i,item in enumerate(seq):
-            history+=item
-            if i!=his_len:
-                history+=' , '
+            user=self.users[index]
+            user_history=self.review_data[user][-self.max_len:]
+            id=0
+            inputs=[]
+            labels=[]
+            ft_prob=self.rng.random()
+            if ft_prob<0.5:    
+                for item in user_history:
+                    prob = self.rng.random()
+                    if prob < self.mask_prob:
+                        prob /= self.mask_prob
+
+                        if prob < 0.8:
+                            sentinel='<extra_id_{}>'
+                            sentinel=sentinel.format(id)
+                            id+=1
+                            inputs.append(sentinel)
+                            sentinel=sentinel+' '+item
+                            labels.append(sentinel)
+
+                        elif prob < 0.9:
+                            inputs.append(self.items[self.rng.randint(0,self.item_count-1)])
+                        else:
+                            inputs.append(item)
+                    else:
+                        inputs.append(item)
             else:
-                history+=' .'
-        # if self.mode=='train':
-        #     user=self.users[index]
-        #     user_history=self.review_data[user][-self.max_len:]
-        #     id=0
-        #     inputs=[]
-        #     labels=[]
-        #     for item in user_history:
-        #         prob = self.rng.random()
-        #         if prob < self.mask_prob:
-        #             prob /= self.mask_prob
+                inputs=user_history[:-1]
+                inputs.append('<extra_id_0>')
+                labels.append('<extra_id_0> '+user_history[-1])
 
-        #             if prob < 0.8:
-        #                 sentinel='<extra_id_{}>'
-        #                 sentinel=sentinel.format(id)
-        #                 id+=1
-        #                 inputs.append(sentinel)
-        #                 sentinel=sentinel+' '+item
-        #                 labels.append(sentinel)
-
-        #             elif prob < 0.9:
-        #                 inputs.append(self.items[self.rng.randint(0,self.item_count-1)])
-        #             else:
-        #                 inputs.append(item)
-        #         else:
-        #             inputs.append(item)
-        #     history=''
-        #     his_len=len(inputs)-1
-        #     for i,item in enumerate(inputs):
-        #         history+=item
-        #         if i!=his_len:
-        #             history+=' , '
-        #         else:
-        #             history+=' .'
-        #     ans=''
-        #     ans_len=len(labels)-1
-        #     for i,item in enumerate(labels):
-        #         ans+=item
-        #         if i != ans_len:
-        #             ans+=' '
-        # else:
-        #     #print(len(self.users))
-        #     user=self.users[index]
-        #     #print(user)
-        #     user_history=self.review_data[user]
-        #     #print(len(user_history))
-        #     #print(user_history)
-        #     seq=user_history[-self.max_len:-1]
-        #     ans=user_history[-1:]
-        #     ans=ans[0]
-        #     #print(ans)
-        #     history=''
-        #     his_len=len(seq)-1
-        #     for i,item in enumerate(seq):
-        #         history+=item
-        #         if i!=his_len:
-        #             history+=' , '
-        #         else:
-        #             # history+=' .' 
-        #             history+=' , <extra_id_0>.' 
-        #     ans='<extra_id_0> '+ans         
+            history=''
+            his_len=len(inputs)-1
+            for i,item in enumerate(inputs):
+                history+=item
+                if i!=his_len:
+                    history+=' , '
+                else:
+                    history+=' .'
+            ans=''
+            ans_len=len(labels)-1
+            for i,item in enumerate(labels):
+                ans+=item
+                if i != ans_len:
+                    ans+=' '
+        else:
+            #print(len(self.users))
+            user=self.users[index]
+            #print(user)
+            user_history=self.review_data[user]
+            #print(len(user_history))
+            #print(user_history)
+            seq=user_history[-self.max_len:-1]
+            ans=user_history[-1:]
+            ans=ans[0]
+            #print(ans)
+            history=''
+            his_len=len(seq)-1
+            for i,item in enumerate(seq):
+                history+=item
+                if i!=his_len:
+                    history+=' , '
+                else:
+                    # history+=' .' 
+                    history+=' , <extra_id_0>.' 
+            ans='<extra_id_0> '+ans         
         # source_txt=self.template['source'].format('',history)
         source_txt=self.template['source'].format(user,history)
         # source_txt=self.template['source'].format(history)
@@ -216,7 +223,45 @@ class Amazon_Dataset(Dataset):
             return source_txt,target_text
         else:
             return source_txt,target_text,self.test_negative_samples[user]
+   
+   
+   
+   
+   
+    # def __getitem__(self,index):#用于sliding-window
+    #         # print(index)
+    #         #print(len(self.users))
+    #         user=self.users[index]
+    #         #print(user)
+    #         user_name=self.review_data[user][0]
+    #         user_history=self.review_data[user][1:]
+    #         #print(len(user_history))
+    #         #print(user_history)
+    #         # if self.mode=='train':
+    #         #     history_sample=self.rng.randint(self.args.min_uc-2,len(user_history))
+    #         #     user_history=user_history[:history_sample]
+    #         seq=user_history[-self.max_len:-1]
+    #         ans=user_history[-1:]
+    #         ans=ans[0]
+    #         #print(ans)
+    #         history=''
+    #         his_len=len(seq)-1
+    #         for i,item in enumerate(seq):
+    #             history+=item
+    #             if i!=his_len:
+    #                 history+=' , '
+    #             else:
+    #                 history+=' .'
+    #         # source_txt=self.template['source'].format('',history)
+    #         source_txt=self.template['source'].format(user_name,history)
+    #         # source_txt=self.template['source'].format(history)
+    #         target_text = self.template['target'].format(ans)
             
-        
+
+    #         if self.mode=='train':
+    #             return source_txt,target_text
+    #         else:
+    #             return source_txt,target_text,self.test_negative_samples[user]       
             
+                
         

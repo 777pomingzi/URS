@@ -145,13 +145,51 @@ def df_merge(left,right):
     return pd.merge(left, right, on=['asin'],how='left')
 
 
-def split_df(df,umap,min_uc):
+# def split_df(df,umap,min_uc):
+#     user_group=df.groupby('reviewerID')
+#     # print(len(user_group))
+#     user_seq=user_group.progress_apply(lambda d:list(d.sort_values(by='unixReviewTime')['title']))
+#     train,val,test={},{},{}
+#     num=0
+#     sum=0
+#     # for user in umap:
+#         # query="reviewerID=='"+user+"'"
+#         # username=df.query(query).head(1)['reviewerName'].item()
+#         # items=user_seq[user]
+#         # if(len(items)>=min_uc) and username not in train.keys(): 
+#         #     num+=1
+#         #     sum+=len(items)
+#         #     train[username],val[username],test[username]=items[:-2],items[:-1],items[:]
+#     user_pool=set()
+#     for i in range(1,len(umap)+1):
+#         # user_id=map_u[i]
+#         query="reviewerID=="+str(i)
+#         username=df.query(query).head(1)['reviewerName'].item()
+#         # print(username)
+#         if username in user_pool:
+#             continue
+#         user_pool.add(username)
+#         items=user_seq[i]
+#         if(len(items)>=min_uc):
+#         # if(len(items)>=min_uc) and username not in train.keys():
+#             train[username],val[username],test[username]=items[:-2],items[:-1],items[:]
+#             num+=1
+#             sum+=len(items)
+#     print('num of user sequence : ',num)
+#     print('average length of user sequence : ',sum/num)
+#     users=list(train.keys())
+#     umap={u:i for i,u in enumerate(users)}
+#     return train,val,test,umap
+
+def split_df(df,umap,min_uc):#用于sliding-window的预处理
     user_group=df.groupby('reviewerID')
-    print(len(user_group))
+    # print(len(user_group))
     user_seq=user_group.progress_apply(lambda d:list(d.sort_values(by='unixReviewTime')['title']))
     train,val,test={},{},{}
     num=0
     sum=0
+    train_id=0
+    val_id=0
     # for user in umap:
         # query="reviewerID=='"+user+"'"
         # username=df.query(query).head(1)['reviewerName'].item()
@@ -160,28 +198,30 @@ def split_df(df,umap,min_uc):
         #     num+=1
         #     sum+=len(items)
         #     train[username],val[username],test[username]=items[:-2],items[:-1],items[:]
-    user_pool=set()
-    for i in range(1,len(umap)+1):
+    for i in tqdm(range(1,len(umap)+1)):
         # user_id=map_u[i]
         query="reviewerID=="+str(i)
-        username=df.query(query).head(1)['reviewerName'].item()
-        print(username)
-        if username in user_pool:
-            continue
-        user_pool.add(username)
+        username=[]
+        username.append(df.query(query).head(1)['reviewerName'].item())
+        # print(username)
         items=user_seq[i]
-        if(len(items)>=min_uc):
+        items=username+items
+        if(len(items)>=min_uc+1):
         # if(len(items)>=min_uc) and username not in train.keys():
-            train[username],val[username],test[username]=items[:-2],items[:-1],items[:]
+            for sam_len in range(min_uc+1,len(items)+2):
+                sub_items=items[:sam_len]
+                train[train_id]=sub_items[:-2]
+                train_id+=1
+            val[val_id]=items[:-1]
+            test[val_id]=items[:]
+            val_id+=1
             num+=1
-            sum+=len(items)
+            sum+=(len(items)-1)
     print('num of user sequence : ',num)
     print('average length of user sequence : ',sum/num)
     users=list(train.keys())
     umap={u:i for i,u in enumerate(users)}
     return train,val,test,umap
-
-
 
 def download_raw_dataset(url,name,is_zipfile=True):
     folder_path='../Data'
@@ -311,7 +351,7 @@ def densify_index_bert(df):
 def split_df_bert(df,umap,min_uc):
     print('split_df_bert')
     user_group=df.groupby('reviewerID')
-    print(len(user_group))
+    # print(len(user_group))
     user_seq=user_group.progress_apply(lambda d:list(d.sort_values(by='unixReviewTime')['asin']))
     train,val,test={},{},{}
     user=0
@@ -321,7 +361,7 @@ def split_df_bert(df,umap,min_uc):
         # user_id=map_u[i]
         query="reviewerID=="+str(i)
         username=df.query(query).head(1)['reviewerName'].item()
-        print(username)
+        # print(username)
         if username in user_pool:
             continue
         user_pool.add(username)

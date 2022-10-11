@@ -1,8 +1,8 @@
 #设定模型的input和target
 import torch
 template={}
-# template['source'] = "Given the following purchase history of user_{} : \n {} \n predict masked item to be purchased by the user ?"
-template['source'] = "Given the following purchase history of user_{} : \n {} \n predict next possible item to be purchased by the user ?"
+template['source'] = "Given the following purchase history of user_{} : \n {} \n predict masked item to be purchased by the user ?"
+# template['source'] = "Given the following purchase history of user_{} : \n {} \n predict next possible item to be purchased by the user ?"
 # template['source']="{}"
 template['target'] = "{}"
 template['task'] = "sequential"
@@ -12,6 +12,7 @@ template['target_argc'] = 1
 template['target_argv'] = ['item_name']
 
 def set_template(args):
+        print(torch.cuda.device_count())  
         torch.distributed.init_process_group(backend="nccl",init_method='env://')
     #if args.template is None:
         #return 
@@ -30,7 +31,7 @@ def set_template(args):
         args.train_batch_size=batch
         args.val_batch_size=batch
         args.test_batch_size=batch
-        args.bert_mask_prob=0.15
+        args.bert_mask_prob=0.2
 
         args.train_negative_sampler_code='random'
         args.train_negative_sample_size=0
@@ -45,7 +46,7 @@ def set_template(args):
         args.device = torch.device("cuda", args.local_rank)
         # print(args.device)
         # args.device='cuda'
-        args.num_gpu=8
+        args.num_gpu=1
         # args.device_idx='0'
 
         args.num_beams=20

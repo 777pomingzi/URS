@@ -32,7 +32,7 @@ parser.add_argument('--dataloader_random_seed', type=float, default=0.0)
 parser.add_argument('--train_batch_size', type=int, default=8)
 parser.add_argument('--val_batch_size', type=int, default=8)
 parser.add_argument('--test_batch_size', type=int, default=8)
-
+parser.add_argument('--bert_mask_prob', type=float, default=None, help='Probability for masking items in the training sequence')
 ################
 # NegativeSampler
 ################

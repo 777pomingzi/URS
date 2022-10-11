@@ -9,13 +9,18 @@ def train(args):
     train_dataset=Amazon_dataset.Amazon_Dataset(args,'train')
     val_dataset=Amazon_dataset.Amazon_Dataset(args,'val')
     test_dataset=Amazon_dataset.Amazon_Dataset(args,'test')
-    # print(train_dataset[0])
-    # print(val_dataset[0])
-    # # print(test_dataset[0])
-    # for i in range(1000):
+    # for i in range (10):
+    #     _,_,negs=val_dataset[i]
+    #     print(len(negs))
+    #     print('------------------------')
+    # input,label=train_dataset[2]
+    # print('------------------------------------')
+    # print(input)
+    # print(label)
+    # for i in range(10):
     #     print(train_dataset[i])
-    #     print(val_dataset[i])
-    #     print(test_dataset[i])
+    # print(val_dataset[10])
+    # print(test_dataset[10])
     train_sampler=DistributedSampler(train_dataset)
     val_sampler=DistributedSampler(val_dataset)
     test_sampler=DistributedSampler(test_dataset)

@@ -12,6 +12,7 @@ from pathlib import Path
 from tensorboardX import SummaryWriter
 import numpy as np
 import os
+import random
 class Amazon_trainer(object):
     def __init__(self,args,export_root,train_loader=None, val_loader=None, test_loader=None):
         self.args = args
@@ -21,7 +22,9 @@ class Amazon_trainer(object):
         self.device=args.device
         self.metric_ks = args.metric_ks
         self.best_metric = args.best_metric
-
+        self.rng=random.Random(self.args.seed)
+        # self.tokenizer = T5Tokenizer.from_pretrained('t5-large')
+        # self.model = T5ForConditionalGeneration.from_pretrained('t5-large').to(self.device)
         self.tokenizer = T5Tokenizer.from_pretrained('t5-base')
         self.model = T5ForConditionalGeneration.from_pretrained('t5-base').to(self.device)
         # config = T5Config().from_pretrained('t5-base')
@@ -72,8 +75,11 @@ class Amazon_trainer(object):
             average_meter_set = AverageMeterSet()
             tqdm_dataloader=tqdm(self.train_loader)
 
-            for input,label in tqdm_dataloader:
-
+            for input,label in tqdm_dataloader:\
+                #sliding-window用于随机采样
+                # dp_prob=self.rng.random()
+                # if dp_prob<0.95:
+                #     continue
                 batch_size = len(label)
 
                 self.optimizer.zero_grad()
@@ -110,8 +116,9 @@ class Amazon_trainer(object):
                     }
                     log_data.update(average_meter_set.averages())
                     self.logger_service.log_train(log_data)
-            if epoch%5==0:
-                self.validate(epoch,accum_iter) 
+            # if epoch%5==0:
+            # if epoch>5:
+            self.validate(epoch,accum_iter) 
         # self.validate(epoch,accum_iter) 
         self.test(accum_iter)
         self.writer.close()
